@@ -1,0 +1,6 @@
+[package]
+name = "ex01"
+version = "0.1.0"
+authors = ["Akito Ito <akito0107@gmail.com>"]
+
+[dependencies]
