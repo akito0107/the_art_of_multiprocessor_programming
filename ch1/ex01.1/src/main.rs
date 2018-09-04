@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
 
 struct Philosopher {
     id: u8,
@@ -32,30 +32,30 @@ struct Table {
 }
 
 fn main() {
-    let table = Arc::new(Table{forks: vec![
-        Mutex::new(()),
-        Mutex::new(()),
-        Mutex::new(()),
-        Mutex::new(()),
-        Mutex::new(()),
-    ]});
+    let table = Arc::new(Table {
+        forks: vec![
+            Mutex::new(()),
+            Mutex::new(()),
+            Mutex::new(()),
+            Mutex::new(()),
+            Mutex::new(()),
+        ],
+    });
 
     let philosophers = vec![
         Philosopher::new(0, 0, 1),
         Philosopher::new(1, 1, 2),
         Philosopher::new(2, 2, 3),
         Philosopher::new(3, 3, 4),
-        Philosopher::new(4, 4, 0),
+        Philosopher::new(4, 0, 4), // ex1.2
     ];
 
     let handles: Vec<_> = philosophers
         .into_iter()
         .map(|p| {
             let table = table.clone();
-            thread::spawn(move || {
-                loop {
-                   p.eat(&table);
-                }
+            thread::spawn(move || loop {
+                p.eat(&table);
             })
         }).collect();
 
