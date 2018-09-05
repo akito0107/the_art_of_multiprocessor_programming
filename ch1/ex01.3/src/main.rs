@@ -1,65 +1,66 @@
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+enum State {
+    Thinking,
+    Hungry,
+    Eating,
+}
+
 struct Philosopher {
     id: u8,
-    left: usize,
-    right: usize,
 }
 
 impl Philosopher {
-    fn new(id: u8, left: usize, right: usize) -> Philosopher {
-        Philosopher {
-            id: id,
-            left: left,
-            right: right,
-        }
+    fn new(id: u8) -> Philosopher {
+        Philosopher { id: id }
     }
 
-    fn eat(&self, table: &Table) {
-        println!("{} waiting for lock {}", self.id, self.left);
-        let _left = table.forks[self.left].lock().unwrap();
-        println!("{} waiting for lock {}", self.id, self.right);
-        let _right = table.forks[self.right].lock().unwrap();
-
-        println!("{} is eating,", self.id);
-        thread::sleep(Duration::from_millis(2000));
-        println!("{} is done eating,", self.id);
+    fn eat(&self, mutex: &Mutex<Monitor>) {
+        match mutex.try_lock() {
+            Ok(ref mut mutex) => {
+                if mutex.states[self.id as usize] == State::Thinking {};
+                return;
+            }
+            _ => (),
+        };
     }
 }
 
-struct Table {
-    forks: Vec<Mutex<()>>,
+struct Monitor {
+    states: Vec<State>,
 }
 
 fn main() {
-    let table = Arc::new(Table {
-        forks: vec![
-            Mutex::new(()),
-            Mutex::new(()),
-            Mutex::new(()),
-            Mutex::new(()),
-            Mutex::new(()),
+    let states = Arc::new(Mutex::new(Monitor {
+        states: vec![
+            State::Thinking,
+            State::Thinking,
+            State::Thinking,
+            State::Thinking,
+            State::Thinking,
         ],
-    });
+    }));
 
     let philosophers = vec![
-        Philosopher::new(0, 0, 1),
-        Philosopher::new(1, 1, 2),
-        Philosopher::new(2, 2, 3),
-        Philosopher::new(3, 3, 4),
-        Philosopher::new(4, 0, 4),
+        Philosopher::new(0),
+        Philosopher::new(1),
+        Philosopher::new(2),
+        Philosopher::new(3),
+        Philosopher::new(4),
     ];
 
+    // let (tx, rx) = channel();
     let handles: Vec<_> = philosophers
         .into_iter()
         .map(|p| {
-            let table = table.clone();
+            let mutex = states.clone();
             thread::spawn(move || -> () {
                 println!("id {} is spawn", p.id);
                 loop {
-                    p.eat(&table);
+                    p.eat(&mutex);
                 }
             })
         }).collect();
