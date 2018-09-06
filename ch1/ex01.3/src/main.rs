@@ -62,7 +62,7 @@ impl Philosopher {
         let r = self.rx.lock().unwrap();
         self.w_count.set(self.w_count.get() + 1);
         println!("{} is waiting wait count is {:?}", self.id, self.w_count);
-        r.recv();
+        r.recv().unwrap();
     }
 
     fn putdown(&self, mutex: &Mutex<Monitor>) -> Result<(), ()> {
@@ -137,9 +137,6 @@ fn main() {
         ),
     ];
 
-    let (tx, rx): (Sender<i32>, Receiver<i32>) = channel();
-    let r_mut = Arc::new(Mutex::new(rx));
-
     let handles: Vec<_> = philosophers
         .into_iter()
         .map(|p| {
@@ -150,7 +147,7 @@ fn main() {
                     match p.pickup(&mutex) {
                         Ok(_) => {
                             p.eat();
-                            p.putdown(&mutex);
+                            p.putdown(&mutex).unwrap();
                             thread::sleep(Duration::from_millis(1000));
                         }
                         _ => {
