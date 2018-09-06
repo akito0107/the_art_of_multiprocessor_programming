@@ -1,6 +1,6 @@
 use std::cell::Cell;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -14,24 +14,13 @@ enum State {
 struct Philosopher {
     id: u8,
     w_count: Cell<u8>,
-    left: Sender<i32>,
-    right: Sender<i32>,
-    rx: Arc<Mutex<Receiver<i32>>>,
 }
 
 impl Philosopher {
-    fn new(
-        id: u8,
-        left: Sender<i32>,
-        right: Sender<i32>,
-        rx: Arc<Mutex<Receiver<i32>>>,
-    ) -> Philosopher {
+    fn new(id: u8) -> Philosopher {
         Philosopher {
             id: id,
             w_count: Cell::new(0),
-            left: left,
-            right: right,
-            rx: rx,
         }
     }
 
@@ -58,11 +47,9 @@ impl Philosopher {
         thread::sleep(Duration::from_millis(2000));
     }
 
-    fn wait(&self) {
-        let r = self.rx.lock().unwrap();
-        self.w_count.set(self.w_count.get() + 1);
-        println!("{} is waiting wait count is {:?}", self.id, self.w_count);
-        r.recv().unwrap();
+    fn wait(&self, mutex: &Mutex<bool>, cvar Condvar) {
+        let lock = mutex.lock().unwrap();
+        cvar.wait(true).unwrap();
     }
 
     fn putdown(&self, mutex: &Mutex<Monitor>) -> Result<(), ()> {
