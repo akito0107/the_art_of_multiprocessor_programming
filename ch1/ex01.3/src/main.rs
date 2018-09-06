@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -12,6 +13,7 @@ enum State {
 
 struct Philosopher {
     id: u8,
+    w_count: Cell<u8>,
     left: Sender<i32>,
     right: Sender<i32>,
     rx: Arc<Mutex<Receiver<i32>>>,
@@ -26,6 +28,7 @@ impl Philosopher {
     ) -> Philosopher {
         Philosopher {
             id: id,
+            w_count: Cell::new(0),
             left: left,
             right: right,
             rx: rx,
@@ -37,13 +40,14 @@ impl Philosopher {
             Ok(ref mut monitor) => {
                 let right = ((self.id + 1) % 5) as usize;
                 let left = ((self.id + 4) % 5) as usize;
-                if monitor.states[self.id as usize] == State::Hungry
-                    && monitor.states[right] == State::Eating
-                    && monitor.states[left] == State::Eating
+                if monitor.states[self.id as usize] == State::Thinking
+                    && monitor.states[right] != State::Eating
+                    && monitor.states[left] != State::Eating
                 {
                     monitor.states[self.id as usize] = State::Eating;
+                    return Ok(());
                 };
-                Ok(())
+                return Err(());
             }
             _ => Err(()),
         }
@@ -56,6 +60,8 @@ impl Philosopher {
 
     fn wait(&self) {
         let r = self.rx.lock().unwrap();
+        self.w_count.set(self.w_count.get() + 1);
+        println!("{} is waiting wait count is {:?}", self.id, self.w_count);
         r.recv();
     }
 
@@ -64,6 +70,7 @@ impl Philosopher {
         lock.states[self.id as usize] = State::Thinking;
         self.left.send(0).unwrap();
         self.right.send(0).unwrap();
+        println!("{} is done eating", self.id);
         Ok(())
     }
 }
@@ -72,7 +79,7 @@ struct Monitor {
     states: Vec<State>,
 }
 
-fn makeChan() -> (Sender<i32>, Arc<Mutex<Receiver<i32>>>) {
+fn make_chan() -> (Sender<i32>, Arc<Mutex<Receiver<i32>>>) {
     let (tx, rx): (Sender<i32>, Receiver<i32>) = channel();
 
     (tx, Arc::new(Mutex::new(rx)))
@@ -89,7 +96,13 @@ fn main() {
         ],
     }));
 
-    let channels = vec![makeChan(), makeChan(), makeChan(), makeChan(), makeChan()];
+    let channels = vec![
+        make_chan(),
+        make_chan(),
+        make_chan(),
+        make_chan(),
+        make_chan(),
+    ];
 
     let philosophers = vec![
         Philosopher::new(
@@ -138,6 +151,7 @@ fn main() {
                         Ok(_) => {
                             p.eat();
                             p.putdown(&mutex);
+                            thread::sleep(Duration::from_millis(1000));
                         }
                         _ => {
                             p.wait();
