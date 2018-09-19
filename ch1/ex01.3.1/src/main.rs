@@ -45,10 +45,9 @@ impl Philosopher {
         thread::sleep(Duration::from_millis(2000));
     }
 
-    fn wait(&self, mutex: &Mutex<Monitor>, cvar: &Condvar) {
-        let lock = mutex.lock().unwrap();
-        cvar.wait(lock).unwrap();
-    }
+    // fn wait(&self, mutex: &Mutex<Monitor>, cvar: &Condvar) {
+    //     cvar.wait(lock).unwrap();
+    // }
 
     fn putdown(&self, mutex: &Mutex<Monitor>) -> Result<(), ()> {
         let mut lock = mutex.lock().unwrap();
@@ -93,14 +92,15 @@ fn main() {
                 loop {
                     match p.pickup(lock) {
                         Ok(_) => {
-                            p.eat();
                             cvar.notify_all();
+                            p.eat();
                             p.putdown(lock).unwrap();
                             cvar.notify_all();
                         }
                         _ => {
                             println!("id {} is waiting", p.id);
-                            p.wait(lock, cvar);
+                            cvar.wait(mon).unwrap();
+                            // p.wait(lock, cvar);
                         }
                     }
                 }
