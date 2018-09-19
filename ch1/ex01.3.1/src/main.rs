@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -7,7 +6,6 @@ use std::time::Duration;
 #[derive(PartialEq)]
 enum State {
     Thinking,
-    Hungry,
     Eating,
 }
 
@@ -47,16 +45,14 @@ impl Philosopher {
         thread::sleep(Duration::from_millis(2000));
     }
 
-    fn wait(&self, mutex: &Mutex<bool>, cvar Condvar) {
+    fn wait(&self, mutex: &Mutex<Monitor>, cvar: &Condvar) {
         let lock = mutex.lock().unwrap();
-        cvar.wait(true).unwrap();
+        cvar.wait(lock).unwrap();
     }
 
     fn putdown(&self, mutex: &Mutex<Monitor>) -> Result<(), ()> {
         let mut lock = mutex.lock().unwrap();
         lock.states[self.id as usize] = State::Thinking;
-        self.left.send(0).unwrap();
-        self.right.send(0).unwrap();
         println!("{} is done eating", self.id);
         Ok(())
     }
@@ -66,79 +62,45 @@ struct Monitor {
     states: Vec<State>,
 }
 
-fn make_chan() -> (Sender<i32>, Arc<Mutex<Receiver<i32>>>) {
-    let (tx, rx): (Sender<i32>, Receiver<i32>) = channel();
-
-    (tx, Arc::new(Mutex::new(rx)))
-}
-
 fn main() {
-    let states = Arc::new(Mutex::new(Monitor {
-        states: vec![
-            State::Thinking,
-            State::Thinking,
-            State::Thinking,
-            State::Thinking,
-            State::Thinking,
-        ],
-    }));
-
-    let channels = vec![
-        make_chan(),
-        make_chan(),
-        make_chan(),
-        make_chan(),
-        make_chan(),
-    ];
+    let states = Arc::new((
+        Mutex::new(Monitor {
+            states: vec![
+                State::Thinking,
+                State::Thinking,
+                State::Thinking,
+                State::Thinking,
+                State::Thinking,
+            ],
+        }),
+        Condvar::new(),
+    ));
 
     let philosophers = vec![
-        Philosopher::new(
-            0,
-            channels[4].0.clone(),
-            channels[1].0.clone(),
-            channels[0].1.clone(),
-        ),
-        Philosopher::new(
-            1,
-            channels[0].0.clone(),
-            channels[2].0.clone(),
-            channels[1].1.clone(),
-        ),
-        Philosopher::new(
-            2,
-            channels[1].0.clone(),
-            channels[3].0.clone(),
-            channels[2].1.clone(),
-        ),
-        Philosopher::new(
-            3,
-            channels[2].0.clone(),
-            channels[4].0.clone(),
-            channels[3].1.clone(),
-        ),
-        Philosopher::new(
-            4,
-            channels[3].0.clone(),
-            channels[0].0.clone(),
-            channels[4].1.clone(),
-        ),
+        Philosopher::new(0),
+        Philosopher::new(1),
+        Philosopher::new(2),
+        Philosopher::new(3),
+        Philosopher::new(4),
     ];
 
     let handles: Vec<_> = philosophers
         .into_iter()
         .map(|p| {
-            let mutex = states.clone();
+            let pair = states.clone();
             thread::spawn(move || -> () {
-                println!("id {} is spawn", p.id);
+                let &(ref lock, ref cvar) = &*pair;
                 loop {
-                    match p.pickup(&mutex) {
+                    match p.pickup(lock) {
                         Ok(_) => {
                             p.eat();
-                            p.putdown(&mutex).unwrap();
-                            thread::sleep(Duration::from_millis(1000));
+                            cvar.notify_all();
+                            p.putdown(lock).unwrap();
+                            cvar.notify_all();
                         }
                         _ => {
-                            p.wait();
+                            println!("id {} is waiting", p.id);
+                            p.wait(lock, cvar);
                         }
                     }
                 }
